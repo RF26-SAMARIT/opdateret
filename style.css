@@ -1,0 +1,538 @@
+/* ===============================
+SAMMAP STYLE
+=============================== */
+
+*{
+  box-sizing:border-box;
+  margin:0;
+  padding:0;
+  }
+  
+  html,body{
+  height:100%;
+  width:100%;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;
+  background:#020617;
+  color:white;
+  overflow:hidden;
+  }
+  
+  /* ===============================
+  THEMES
+  =============================== */
+  
+  .theme-dark{
+  background:#020617;
+  color:white;
+  }
+  
+  .theme-light{
+  background:#f3f4f6;
+  color:#111827;
+  }
+  
+  /* ===============================
+  LAYOUT
+  =============================== */
+  
+  .screen{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  }
+  
+  .hidden{
+  display:none !important;
+  }
+  
+  /* ===============================
+  LOGIN
+  =============================== */
+  
+  .login-card{
+  width:90%;
+  max-width:420px;
+  background:#0f172a;
+  padding:30px;
+  border-radius:16px;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);
+  }
+  
+  .brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:20px;
+  }
+  
+  .brand-logo{
+  width:40px;
+  }
+  
+  .brand-text h1{
+  font-size:26px;
+  font-weight:700;
+  }
+  
+  .brand-text p{
+  opacity:.6;
+  font-size:13px;
+  }
+  
+  .login-form label{
+  display:flex;
+  flex-direction:column;
+  font-size:14px;
+  margin-bottom:14px;
+  }
+  
+  .login-form input{
+  margin-top:6px;
+  padding:12px;
+  border-radius:8px;
+  border:none;
+  background:#1e293b;
+  color:white;
+  font-size:15px;
+  }
+  
+  .btn{
+  border:none;
+  padding:12px;
+  border-radius:10px;
+  cursor:pointer;
+  font-size:15px;
+  }
+  
+  .btn-primary{
+  background:#dc2626;
+  color:white;
+  }
+  
+  .btn-large{
+  width:100%;
+  margin-top:10px;
+  }
+  
+  .login-footnote{
+  margin-top:16px;
+  font-size:12px;
+  opacity:.6;
+  text-align:center;
+  }
+  
+  /* ===============================
+  TOPBAR
+  =============================== */
+  
+  .topbar{
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  height:64px;
+  background:#020617;
+  border-bottom:1px solid rgba(255,255,255,.05);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 16px;
+  z-index:1000;
+  }
+  
+  .sammap-lockup{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  }
+  
+  .topbar-logo{
+  width:30px;
+  }
+  
+  .identity strong{
+  font-size:16px;
+  }
+  
+  .status-row{
+  display:flex;
+  gap:6px;
+  margin-top:3px;
+  flex-wrap:wrap;
+  }
+  
+  .status-pill{
+  background:#1e293b;
+  padding:4px 8px;
+  border-radius:6px;
+  font-size:11px;
+  }
+  
+  .status-pill.ok{
+  background:#16a34a;
+  }
+  
+  .status-pill.warn{
+  background:#f59e0b;
+  }
+  
+  .status-pill.error{
+  background:#dc2626;
+  }
+  
+  .topbar-right{
+  display:flex;
+  gap:10px;
+  }
+  
+  .icon-btn{
+  width:36px;
+  height:36px;
+  border-radius:10px;
+  background:#0f172a;
+  border:none;
+  cursor:pointer;
+  font-size:16px;
+  color:white;
+  }
+  
+  /* ===============================
+  MAP
+  =============================== */
+  
+  .map-shell{
+  position:absolute;
+  top:64px;
+  left:0;
+  right:0;
+  bottom:0;
+  }
+  
+  #map{
+  width:100%;
+  height:100%;
+  }
+  
+  /* ===============================
+  HUD
+  =============================== */
+  
+  .hud{
+  position:absolute;
+  top:80px;
+  left:10px;
+  display:flex;
+  gap:10px;
+  z-index:900;
+  }
+  
+  .hud-card{
+  background:rgba(0,0,0,.75);
+  padding:10px 14px;
+  border-radius:10px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  font-size:12px;
+  min-width:70px;
+  }
+  
+  .hud-card strong{
+  font-size:18px;
+  }
+  
+  .hud-label{
+  opacity:.6;
+  font-size:11px;
+  }
+  
+  /* ===============================
+  BOTTOM CONTROLS
+  =============================== */
+  
+  .bottom-controls{
+  position:absolute;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  gap:12px;
+  z-index:900;
+  }
+  
+  .action-btn{
+  background:#0f172a;
+  border:none;
+  padding:12px 16px;
+  border-radius:12px;
+  font-size:14px;
+  color:white;
+  cursor:pointer;
+  box-shadow:0 8px 30px rgba(0,0,0,.5);
+  }
+  
+  /* ===============================
+  VEHICLE STATUS
+  =============================== */
+  
+  .vehicle-status-bar{
+  position:absolute;
+  bottom:90px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#020617;
+  padding:12px 18px;
+  border-radius:12px;
+  display:flex;
+  gap:16px;
+  align-items:center;
+  z-index:900;
+  }
+  
+  .vehicle-status-buttons{
+  display:flex;
+  gap:10px;
+  }
+  
+  .status-action{
+  border:none;
+  padding:10px 14px;
+  border-radius:10px;
+  cursor:pointer;
+  font-size:14px;
+  }
+  
+  .status-action-available{
+  background:#22c55e;
+  }
+  
+  .status-action-busy{
+  background:#ef4444;
+  }
+  
+  /* ===============================
+  FLEET PANEL
+  =============================== */
+  
+  .fleet-panel{
+  position:absolute;
+  top:80px;
+  right:10px;
+  width:220px;
+  background:#020617;
+  border-radius:12px;
+  padding:10px;
+  box-shadow:0 10px 40px rgba(0,0,0,.6);
+  z-index:900;
+  }
+  
+  .fleet-panel-header{
+  display:flex;
+  justify-content:space-between;
+  font-size:13px;
+  margin-bottom:8px;
+  }
+  
+  .fleet-list{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  }
+  
+  .fleet-item{
+  display:flex;
+  justify-content:space-between;
+  background:#0f172a;
+  padding:8px;
+  border-radius:8px;
+  font-size:13px;
+  cursor:pointer;
+  }
+  
+  /* ===============================
+  OPERATIONS PANEL
+  =============================== */
+  
+  .operations-panel{
+  position:absolute;
+  top:64px;
+  right:0;
+  width:320px;
+  bottom:0;
+  background:#020617;
+  border-left:1px solid rgba(255,255,255,.06);
+  padding:16px;
+  overflow:auto;
+  }
+  
+  .operations-header h2{
+  font-size:20px;
+  }
+  
+  .operations-section{
+  margin-top:18px;
+  }
+  
+  .operations-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  }
+  
+  .operations-item{
+  background:#0f172a;
+  padding:10px;
+  border-radius:10px;
+  font-size:13px;
+  }
+  
+  .operations-actions{
+  margin-top:6px;
+  display:flex;
+  gap:6px;
+  }
+  
+  .ops-center-btn,
+  .ops-dispatch-btn{
+  border:none;
+  padding:6px 10px;
+  border-radius:6px;
+  cursor:pointer;
+  background:#1e293b;
+  color:white;
+  }
+  
+  /* ===============================
+  MODALS
+  =============================== */
+  
+  .modal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.7);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:2000;
+  }
+  
+  .modal-card{
+  background:#020617;
+  border-radius:14px;
+  width:92%;
+  max-width:420px;
+  padding:20px;
+  }
+  
+  .modal-header{
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:14px;
+  }
+  
+  .modal-close{
+  background:none;
+  border:none;
+  font-size:20px;
+  color:white;
+  cursor:pointer;
+  }
+  
+  .modal-card form{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  }
+  
+  .modal-card input,
+  .modal-card textarea,
+  .modal-card select{
+  padding:10px;
+  border-radius:8px;
+  border:none;
+  background:#1e293b;
+  color:white;
+  }
+  
+  /* ===============================
+  INCOMING DISPATCH
+  =============================== */
+  
+  .incoming-dispatch{
+  position:absolute;
+  top:80px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#dc2626;
+  padding:14px 20px;
+  border-radius:12px;
+  box-shadow:0 10px 40px rgba(0,0,0,.6);
+  z-index:1000;
+  }
+  
+  /* ===============================
+  MAP LOADING
+  =============================== */
+  
+  .map-loading{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#020617;
+  z-index:1500;
+  flex-direction:column;
+  }
+  
+  .spinner{
+  width:40px;
+  height:40px;
+  border:4px solid rgba(255,255,255,.2);
+  border-top:4px solid white;
+  border-radius:50%;
+  animation:spin 1s linear infinite;
+  margin-bottom:12px;
+  }
+  
+  @keyframes spin{
+  0%{transform:rotate(0)}
+  100%{transform:rotate(360deg)}
+  }
+  
+  /* ===============================
+  VEHICLE MARKERS
+  =============================== */
+  
+  .vehicle-marker,
+  .other-vehicle-marker{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  }
+  
+  .vehicle-rotator{
+  transition:transform .2s linear;
+  }
+  
+  /* ===============================
+  MOBILE
+  =============================== */
+  
+  @media(max-width:700px){
+  
+  .operations-panel{
+  display:none;
+  }
+  
+  .fleet-panel{
+  width:180px;
+  }
+  
+  .hud{
+  gap:6px;
+  }
+  
+  }

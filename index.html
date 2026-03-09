@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+  />
+  <meta name="theme-color" content="#08111f" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SamMap" />
+  <title>SamMap</title>
+
+  <link rel="icon" href="rodekors.png" />
+  <link rel="apple-touch-icon" href="rodekors.png" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="theme-dark">
+  <div id="app">
+    <!-- LOGIN -->
+    <section id="loginScreen" class="screen screen-login">
+      <div class="login-card">
+        <div class="brand">
+          <img src="rodekors.png" alt="SamMap logo" class="brand-logo" />
+          <div class="brand-text">
+            <h1>SamMap</h1>
+            <p>Samarit Operations Map</p>
+          </div>
+        </div>
+
+        <form id="loginForm" class="login-form" autocomplete="off">
+          <label>
+            <span>Holdnummer</span>
+            <input id="holdInput" type="text" maxlength="20" placeholder="fx B2" required />
+          </label>
+
+          <label>
+            <span>Køretøjsnummer</span>
+            <input id="vehicleInput" type="text" maxlength="20" placeholder="fx 123" required />
+          </label>
+
+          <label class="toggle-row">
+            <input id="dispatcherModeInput" type="checkbox" />
+            <span>Beredskabskontor / operationsvisning</span>
+          </label>
+
+          <button type="submit" class="btn btn-primary btn-large">Åbn SamMap</button>
+        </form>
+
+        <div class="login-footnote">
+          Live kort, navigation, status, hændelser og koordinering for samariternes køretøjer.
+        </div>
+      </div>
+    </section>
+
+    <!-- MAIN APP -->
+    <section id="mainScreen" class="screen screen-main hidden">
+      <!-- TOPBAR -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="sammap-lockup">
+            <img src="rodekors.png" alt="SamMap logo" class="topbar-logo" />
+            <div class="identity">
+              <strong id="identityText">SamMap</strong>
+              <div class="status-row">
+                <span id="roleStatus" class="status-pill muted">Køretøj</span>
+                <span id="gpsStatus" class="status-pill">Venter på GPS</span>
+                <span id="networkStatus" class="status-pill muted">Online</span>
+                <span id="mapStatus" class="status-pill muted">Kort starter</span>
+                <span id="firebaseStatus" class="status-pill muted">Firebase</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <button id="fleetToggleBtn" class="icon-btn" title="Vis/skjul køretøjer" aria-label="Vis eller skjul køretøjer">🚑</button>
+          <button id="incidentToggleBtn" class="icon-btn" title="Opret hændelse" aria-label="Opret hændelse">⚠️</button>
+          <button id="logoutBtn" class="icon-btn" title="Log ud" aria-label="Log ud">⎋</button>
+        </div>
+      </header>
+
+      <main class="map-shell">
+        <div id="mapViewport">
+          <div id="map"></div>
+        </div>
+
+        <!-- MAP LOADING -->
+        <div id="mapLoading" class="map-loading">
+          <div class="map-loading-card">
+            <div class="spinner"></div>
+            <strong>Starter SamMap...</strong>
+            <p id="mapLoadingText">Indlæser kort, GPS og Firebase</p>
+          </div>
+        </div>
+
+        <!-- MAP ERROR -->
+        <div id="mapError" class="map-error hidden">
+          <div class="map-error-card">
+            <strong>Kortet kunne ikke vises korrekt</strong>
+            <p id="mapErrorText">Prøv igen om et øjeblik.</p>
+            <button id="retryMapBtn" class="btn btn-secondary">Prøv igen</button>
+          </div>
+        </div>
+
+        <!-- HUD -->
+        <div class="hud">
+          <div class="hud-card">
+            <span class="hud-label">Hastighed</span>
+            <strong id="speedValue">0</strong>
+            <span class="hud-unit">km/t</span>
+          </div>
+
+          <div class="hud-card">
+            <span class="hud-label">Retning</span>
+            <strong id="headingValue">-</strong>
+            <span class="hud-unit">kurs</span>
+          </div>
+
+          <div class="hud-card">
+            <span class="hud-label">Mål</span>
+            <strong id="distanceValue">-</strong>
+            <span class="hud-unit">meter</span>
+          </div>
+        </div>
+
+        <!-- MAP TOP OVERLAY -->
+        <div class="map-overlay-top">
+          <div class="map-tip" id="mapTip">
+            Tryk på kortet for at sætte mål · tryk på målet igen for at fjerne det
+          </div>
+
+          <!-- DISPATCHER QUICK STATS -->
+          <div class="dispatcher-strip" id="dispatcherStrip">
+            <div class="dispatcher-stat">
+              <span>Aktive køretøjer</span>
+              <strong id="dispatcherVehicleCount">0</strong>
+            </div>
+            <div class="dispatcher-stat">
+              <span>Ledige køretøjer</span>
+              <strong id="dispatcherAvailableCount">0</strong>
+            </div>
+            <div class="dispatcher-stat">
+              <span>Aktive hændelser</span>
+              <strong id="dispatcherIncidentCount">0</strong>
+            </div>
+            <div class="dispatcher-stat">
+              <span>Status</span>
+              <strong id="dispatcherLiveStatus">Live</strong>
+            </div>
+          </div>
+
+          <!-- FLEET PANEL -->
+          <div class="fleet-panel hidden" id="fleetPanel">
+            <div class="fleet-panel-header">
+              <strong>Aktive køretøjer</strong>
+              <span id="fleetCount">0</span>
+            </div>
+            <div id="fleetList" class="fleet-list"></div>
+          </div>
+        </div>
+
+        <!-- VEHICLE STATUS BAR -->
+        <div id="vehicleStatusBar" class="vehicle-status-bar hidden">
+          <div class="vehicle-status-left">
+            <div class="vehicle-status-title">Køretøjsstatus</div>
+            <div class="vehicle-status-current">
+              Aktuel status:
+              <strong id="currentVehicleStatusText">Ledig</strong>
+            </div>
+          </div>
+
+          <div class="vehicle-status-buttons">
+            <button id="setAvailableBtn" class="status-action status-action-available">
+              🟢 Ledig
+            </button>
+            <button id="setBusyBtn" class="status-action status-action-busy">
+              🔴 Optaget
+            </button>
+          </div>
+        </div>
+
+        <!-- BOTTOM CONTROLS -->
+        <div class="bottom-controls">
+          <button id="centerBtn" class="action-btn">Center</button>
+          <button id="fullscreenBtn" class="action-btn">Fullscreen</button>
+          <button id="themeBtn" class="action-btn">Dag / Nat</button>
+        </div>
+
+        <!-- OPERATIONS PANEL / TABLET VIEW -->
+        <aside id="operationsPanel" class="operations-panel hidden">
+          <div class="operations-header">
+            <div>
+              <h2>SamMap Operations</h2>
+              <p>Live overblik for beredskabskontoret</p>
+            </div>
+          </div>
+
+          <div class="operations-grid">
+            <section class="operations-section">
+              <div class="operations-section-header">
+                <strong>Køretøjer</strong>
+                <span id="operationsVehicleCount">0</span>
+              </div>
+              <div id="operationsVehicleList" class="operations-list"></div>
+            </section>
+
+            <section class="operations-section">
+              <div class="operations-section-header">
+                <strong>Hændelser</strong>
+                <span id="operationsIncidentCount">0</span>
+              </div>
+              <div id="operationsIncidentList" class="operations-list"></div>
+            </section>
+          </div>
+        </aside>
+      </main>
+    </section>
+
+    <!-- DISPATCH MODAL -->
+    <div id="dispatchModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <strong>Send melding</strong>
+          <button id="closeDispatchModalBtn" class="modal-close" aria-label="Luk">×</button>
+        </div>
+
+        <form id="dispatchForm" class="dispatch-form">
+          <div class="form-row">
+            <label>
+              <span>Til køretøj</span>
+              <input id="dispatchTargetInput" type="text" readonly />
+            </label>
+          </div>
+
+          <div class="form-row suggestion-row hidden" id="nearestSuggestionBox">
+            <div class="suggestion-card">
+              <span class="suggestion-label">Foreslået nærmeste ledige køretøj</span>
+              <strong id="nearestSuggestionText">Ingen forslag endnu</strong>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label>
+              <span>Beskrivelse</span>
+              <textarea id="dispatchMessageInput" rows="4" placeholder="fx Patient med brystsmerter ved camp 14" required></textarea>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <label>
+              <span>Destination / tekst</span>
+              <input id="dispatchDestinationInput" type="text" placeholder="fx Camp 32" />
+            </label>
+          </div>
+
+          <label class="toggle-row">
+            <input id="dispatchAttachWaypointInput" type="checkbox" />
+            <span>Vedhæft nuværende waypoint-lokation</span>
+          </label>
+
+          <div class="form-row modal-actions">
+            <button type="button" id="cancelDispatchBtn" class="btn btn-secondary">Annuller</button>
+            <button type="submit" class="btn btn-primary">Send melding</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- INCIDENT MODAL -->
+    <div id="incidentModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-card">
+        <div class="modal-header">
+          <strong>Opret hændelse</strong>
+          <button id="closeIncidentModalBtn" class="modal-close" aria-label="Luk">×</button>
+        </div>
+
+        <form id="incidentForm" class="dispatch-form">
+          <div class="form-row">
+            <label>
+              <span>Type</span>
+              <select id="incidentTypeInput" class="select-input" required>
+                <option value="medical">🚑 Medicinsk</option>
+                <option value="fire">🔥 Brand</option>
+                <option value="security">⚠️ Sikkerhed</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <label>
+              <span>Beskrivelse</span>
+              <textarea id="incidentDescriptionInput" rows="4" placeholder="fx Person faldet om ved campområde" required></textarea>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <label>
+              <span>Placering / tekst</span>
+              <input id="incidentLocationTextInput" type="text" placeholder="fx Camp 32" />
+            </label>
+          </div>
+
+          <div class="form-row">
+            <label>
+              <span>Valgt kortposition</span>
+              <input id="incidentCoordinatesInput" type="text" readonly />
+            </label>
+          </div>
+
+          <div class="form-row suggestion-row hidden" id="incidentNearestSuggestionBox">
+            <div class="suggestion-card">
+              <span class="suggestion-label">Nærmeste ledige køretøj</span>
+              <strong id="incidentNearestSuggestionText">Intet forslag endnu</strong>
+            </div>
+          </div>
+
+          <div class="form-row modal-actions">
+            <button type="button" id="cancelIncidentBtn" class="btn btn-secondary">Annuller</button>
+            <button type="submit" class="btn btn-primary">Opret hændelse</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- INCOMING DISPATCH -->
+    <div id="incomingDispatchBanner" class="incoming-dispatch hidden" aria-live="assertive">
+      <div class="incoming-dispatch-card">
+        <button id="closeIncomingDispatchBtn" class="incoming-close" aria-label="Luk besked">×</button>
+
+        <div class="incoming-head">🚑 Ny melding</div>
+
+        <div class="incoming-body">
+          <div class="incoming-line">
+            <span class="incoming-label">Fra</span>
+            <strong id="incomingFrom">-</strong>
+          </div>
+
+          <div class="incoming-line">
+            <span class="incoming-label">Beskrivelse</span>
+            <p id="incomingMessage">-</p>
+          </div>
+
+          <div class="incoming-line">
+            <span class="incoming-label">Destination</span>
+            <strong id="incomingDestination">-</strong>
+          </div>
+        </div>
+
+        <div class="incoming-actions">
+          <button id="applyIncomingWaypointBtn" class="btn btn-secondary hidden" type="button">
+            Sæt som mål
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
