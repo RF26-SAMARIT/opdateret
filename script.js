@@ -20,23 +20,22 @@ const db = firebase.firestore();
    APP CONFIG
 ===================================================== */
 
-const APP_VERSION = "sammap-v7";
-const SESSION_KEY = `sammap-session-${APP_VERSION}`;
-const THEME_KEY = `sammap-theme-${APP_VERSION}`;
-const SETTINGS_KEY = `sammap-settings-${APP_VERSION}`;
+const APP_VERSION = "v7-rf-ops";
+const SESSION_KEY = `rf-session-${APP_VERSION}`;
+const THEME_KEY = `rf-theme-${APP_VERSION}`;
+const SETTINGS_KEY = `rf-settings-${APP_VERSION}`;
 
 const FESTIVAL_CENTER = [55.6416, 12.0803];
-const MAP_FALLBACK_ZOOM = 17;
-
 const GPS_OPTIONS = {
   enableHighAccuracy: true,
   timeout: 15000,
   maximumAge: 5000
 };
 
-const POSITION_UPLOAD_MIN_INTERVAL_MS = 1000;
-const POSITION_UPLOAD_MIN_DISTANCE_M = 1;
 const VEHICLE_STALE_MS = 2 * 60 * 1000;
+const POSITION_UPLOAD_MIN_INTERVAL_MS = 1000;
+const POSITION_UPLOAD_MIN_DISTANCE_M = 0;
+const MAP_FALLBACK_ZOOM = 17;
 const GPS_RESTART_THRESHOLD_MS = 12000;
 
 /* =====================================================
@@ -47,48 +46,39 @@ const state = {
   session: null,
   settings: {
     theme: "theme-dark",
-    fleetVisible: false
+    fleetVisible: false,
+    vehicleStatus: "ledig"
   },
-
   map: null,
   tileLayer: null,
-
+  userMarker: null,
+  targetMarker: null,
+  targetLatLng: null,
   currentLatLng: null,
   currentSpeed: 0,
   currentHeading: 0,
-  lastPositionTime: 0,
-  lastGoodAccuracy: null,
-
   watchId: null,
-  gpsRestartInterval: null,
-  gpsFallbackAttemptAt: 0,
-
-  myMarker: null,
-  otherVehicleMarkers: new Map(),
-  incidentMarkers: new Map(),
-
-  targetLatLng: null,
-  targetMarker: null,
-
-  userMovedMap: false,
-
+  vehicleMarkers: new Map(),
   vehiclesData: {},
-  incidentsData: {},
-
+  eventMarkers: new Map(),
+  eventsData: {},
   unsubscribeVehicles: null,
   unsubscribeDispatch: null,
-  unsubscribeIncidents: null,
-
+  unsubscribeEvents: null,
   lastUploadAt: 0,
   lastUploadedLatLng: null,
-
   activeDispatchId: null,
   activeDispatchData: null,
   dispatchTargetId: null,
-
-  selectedIncidentLatLng: null,
-
-  currentVehicleStatus: "ledig"
+  dispatchTargetLabel: "",
+  dispatcherSelectedLatLng: null,
+  selectedEventId: null,
+  userMovedMap: false,
+  lastGoodAccuracy: null,
+  lastPositionTime: 0,
+  gpsRestartInterval: null,
+  gpsFallbackAttemptAt: 0,
+  pendingMapLatLng: null
 };
 
 /* =====================================================
@@ -97,7 +87,6 @@ const state = {
 
 const els = {
   body: document.body,
-
   loginScreen: document.getElementById("loginScreen"),
   mainScreen: document.getElementById("mainScreen"),
   loginForm: document.getElementById("loginForm"),
@@ -106,49 +95,42 @@ const els = {
   dispatcherModeInput: document.getElementById("dispatcherModeInput"),
 
   identityText: document.getElementById("identityText"),
-  roleStatus: document.getElementById("roleStatus"),
   gpsStatus: document.getElementById("gpsStatus"),
   networkStatus: document.getElementById("networkStatus"),
   mapStatus: document.getElementById("mapStatus"),
   firebaseStatus: document.getElementById("firebaseStatus"),
+  roleStatus: document.getElementById("roleStatus"),
+
+  centerBtn: document.getElementById("centerBtn"),
+  fullscreenBtn: document.getElementById("fullscreenBtn"),
+  themeBtn: document.getElementById("themeBtn"),
+  logoutBtn: document.getElementById("logoutBtn"),
+  fleetToggleBtn: document.getElementById("fleetToggleBtn"),
+  fleetPanel: document.getElementById("fleetPanel"),
+  fleetList: document.getElementById("fleetList"),
+  fleetCount: document.getElementById("fleetCount"),
+
+  statusBtn: document.getElementById("statusBtn"),
+  statusBtnText: document.getElementById("statusBtnText"),
+
+  dispatcherStrip: document.getElementById("dispatcherStrip"),
+  dispatcherVehicleCount: document.getElementById("dispatcherVehicleCount"),
+  dispatcherAvailableCount: document.getElementById("dispatcherAvailableCount"),
+  dispatcherEventCount: document.getElementById("dispatcherEventCount"),
+  dispatcherLiveStatus: document.getElementById("dispatcherLiveStatus"),
+
+  opsPanel: document.getElementById("opsPanel"),
+  opsVehicleList: document.getElementById("opsVehicleList"),
+  opsVehicleCount: document.getElementById("opsVehicleCount"),
+  dispatcherEventsList: document.getElementById("dispatcherEventsList"),
+  opsEventCount: document.getElementById("opsEventCount"),
+  nearestVehicleSuggestion: document.getElementById("nearestVehicleSuggestion"),
 
   mapLoading: document.getElementById("mapLoading"),
   mapLoadingText: document.getElementById("mapLoadingText"),
   mapError: document.getElementById("mapError"),
   mapErrorText: document.getElementById("mapErrorText"),
   retryMapBtn: document.getElementById("retryMapBtn"),
-
-  speedValue: document.getElementById("speedValue"),
-  headingValue: document.getElementById("headingValue"),
-  distanceValue: document.getElementById("distanceValue"),
-
-  centerBtn: document.getElementById("centerBtn"),
-  fullscreenBtn: document.getElementById("fullscreenBtn"),
-  themeBtn: document.getElementById("themeBtn"),
-  fleetToggleBtn: document.getElementById("fleetToggleBtn"),
-  incidentToggleBtn: document.getElementById("incidentToggleBtn"),
-  logoutBtn: document.getElementById("logoutBtn"),
-
-  fleetPanel: document.getElementById("fleetPanel"),
-  fleetList: document.getElementById("fleetList"),
-  fleetCount: document.getElementById("fleetCount"),
-
-  dispatcherStrip: document.getElementById("dispatcherStrip"),
-  dispatcherVehicleCount: document.getElementById("dispatcherVehicleCount"),
-  dispatcherAvailableCount: document.getElementById("dispatcherAvailableCount"),
-  dispatcherIncidentCount: document.getElementById("dispatcherIncidentCount"),
-  dispatcherLiveStatus: document.getElementById("dispatcherLiveStatus"),
-
-  vehicleStatusBar: document.getElementById("vehicleStatusBar"),
-  currentVehicleStatusText: document.getElementById("currentVehicleStatusText"),
-  setAvailableBtn: document.getElementById("setAvailableBtn"),
-  setBusyBtn: document.getElementById("setBusyBtn"),
-
-  operationsPanel: document.getElementById("operationsPanel"),
-  operationsVehicleCount: document.getElementById("operationsVehicleCount"),
-  operationsVehicleList: document.getElementById("operationsVehicleList"),
-  operationsIncidentCount: document.getElementById("operationsIncidentCount"),
-  operationsIncidentList: document.getElementById("operationsIncidentList"),
 
   dispatchModal: document.getElementById("dispatchModal"),
   dispatchForm: document.getElementById("dispatchForm"),
@@ -158,19 +140,17 @@ const els = {
   dispatchAttachWaypointInput: document.getElementById("dispatchAttachWaypointInput"),
   closeDispatchModalBtn: document.getElementById("closeDispatchModalBtn"),
   cancelDispatchBtn: document.getElementById("cancelDispatchBtn"),
-  nearestSuggestionBox: document.getElementById("nearestSuggestionBox"),
-  nearestSuggestionText: document.getElementById("nearestSuggestionText"),
 
-  incidentModal: document.getElementById("incidentModal"),
-  incidentForm: document.getElementById("incidentForm"),
-  incidentTypeInput: document.getElementById("incidentTypeInput"),
-  incidentDescriptionInput: document.getElementById("incidentDescriptionInput"),
-  incidentLocationTextInput: document.getElementById("incidentLocationTextInput"),
-  incidentCoordinatesInput: document.getElementById("incidentCoordinatesInput"),
-  closeIncidentModalBtn: document.getElementById("closeIncidentModalBtn"),
-  cancelIncidentBtn: document.getElementById("cancelIncidentBtn"),
-  incidentNearestSuggestionBox: document.getElementById("incidentNearestSuggestionBox"),
-  incidentNearestSuggestionText: document.getElementById("incidentNearestSuggestionText"),
+  waypointChoiceModal: document.getElementById("waypointChoiceModal"),
+  closeWaypointChoiceModalBtn: document.getElementById("closeWaypointChoiceModalBtn"),
+  quickWaypointBtn: document.getElementById("quickWaypointBtn"),
+  openEventModalBtn: document.getElementById("openEventModalBtn"),
+
+  eventModal: document.getElementById("eventModal"),
+  eventForm: document.getElementById("eventForm"),
+  eventDescriptionInput: document.getElementById("eventDescriptionInput"),
+  closeEventModalBtn: document.getElementById("closeEventModalBtn"),
+  cancelEventBtn: document.getElementById("cancelEventBtn"),
 
   incomingDispatchBanner: document.getElementById("incomingDispatchBanner"),
   incomingFrom: document.getElementById("incomingFrom"),
@@ -191,7 +171,7 @@ function init() {
   restoreSettings();
   bindEvents();
   updateNetworkStatus();
-  setFirebaseStatus("Firebase klar", "ok");
+  initFirebaseStatus();
   registerServiceWorkerInline();
   restoreSession();
 
@@ -211,40 +191,69 @@ function init() {
 
 function bindEvents() {
   els.loginForm.addEventListener("submit", onLoginSubmit);
-
   els.centerBtn.addEventListener("click", centerMapOnContext);
   els.fullscreenBtn.addEventListener("click", toggleFullscreen);
   els.themeBtn.addEventListener("click", toggleTheme);
-  els.fleetToggleBtn.addEventListener("click", toggleFleetPanel);
-  els.incidentToggleBtn.addEventListener("click", openIncidentModalFromCurrentContext);
   els.logoutBtn.addEventListener("click", logout);
+  els.fleetToggleBtn.addEventListener("click", toggleFleetPanel);
   els.retryMapBtn.addEventListener("click", retryMapInitialization);
-
-  els.setAvailableBtn.addEventListener("click", () => setVehicleStatus("ledig"));
-  els.setBusyBtn.addEventListener("click", () => setVehicleStatus("optaget"));
+  els.statusBtn.addEventListener("click", toggleVehicleStatus);
 
   els.closeDispatchModalBtn.addEventListener("click", closeDispatchModal);
   els.cancelDispatchBtn.addEventListener("click", closeDispatchModal);
   els.dispatchForm.addEventListener("submit", submitDispatchMessage);
 
-  els.closeIncidentModalBtn.addEventListener("click", closeIncidentModal);
-  els.cancelIncidentBtn.addEventListener("click", closeIncidentModal);
-  els.incidentForm.addEventListener("submit", submitIncident);
+  els.closeWaypointChoiceModalBtn.addEventListener("click", closeWaypointChoiceModal);
+  els.quickWaypointBtn.addEventListener("click", createQuickWaypointFromPending);
+  els.openEventModalBtn.addEventListener("click", openEventModalFromPending);
+
+  els.closeEventModalBtn.addEventListener("click", closeEventModal);
+  els.cancelEventBtn.addEventListener("click", closeEventModal);
+  els.eventForm.addEventListener("submit", submitEvent);
 
   els.closeIncomingDispatchBtn.addEventListener("click", closeIncomingDispatch);
   els.applyIncomingWaypointBtn.addEventListener("click", applyIncomingWaypoint);
 
-  els.dispatchModal.addEventListener("click", (event) => {
-    if (event.target === els.dispatchModal) {
-      closeDispatchModal();
-    }
+  [els.dispatchModal, els.waypointChoiceModal, els.eventModal].forEach((modal) => {
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        modal.classList.add("hidden");
+      }
+    });
   });
+}
 
-  els.incidentModal.addEventListener("click", (event) => {
-    if (event.target === els.incidentModal) {
-      closeIncidentModal();
-    }
-  });
+function initFirebaseStatus() {
+  setFirebaseStatus("Firebase klar", "ok");
+}
+
+function restoreTheme() {
+  const saved = localStorage.getItem(THEME_KEY) || "theme-dark";
+  els.body.classList.remove("theme-dark", "theme-light");
+  els.body.classList.add(saved);
+}
+
+function restoreSettings() {
+  const raw = localStorage.getItem(SETTINGS_KEY);
+  if (!raw) return;
+
+  try {
+    state.settings = { ...state.settings, ...JSON.parse(raw) };
+  } catch (error) {
+    console.warn("Kunne ikke læse settings:", error);
+  }
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+}
+
+function updateNetworkStatus() {
+  const online = navigator.onLine;
+  els.networkStatus.textContent = online ? "Online" : "Offline";
+  els.networkStatus.className = "status-pill muted";
+  if (!online) els.networkStatus.classList.add("warn");
+  els.dispatcherLiveStatus.textContent = online ? "Live" : "Offline";
 }
 
 /* =====================================================
@@ -293,29 +302,22 @@ function restoreSession() {
 function openMainApp() {
   els.loginScreen.classList.add("hidden");
   els.mainScreen.classList.remove("hidden");
-
-  els.identityText.textContent = state.session.isDispatcher
-    ? "SamMap · Beredskabskontoret"
-    : `SamMap · Hold ${state.session.hold} · Køretøj ${state.session.vehicle}`;
-
-  els.roleStatus.textContent = state.session.isDispatcher ? "Beredskabskontor" : "Køretøj";
+  els.identityText.textContent = `Hold ${state.session.hold} · Køretøj ${state.session.vehicle}`;
+  els.roleStatus.textContent = state.session.isDispatcher ? "Dispatcher" : "Køretøj";
   els.roleStatus.className = "status-pill muted";
+
+  els.body.classList.toggle("dispatcher-mode", Boolean(state.session.isDispatcher));
+  els.dispatcherStrip.classList.toggle("visible", Boolean(state.session.isDispatcher));
+  els.opsPanel.classList.toggle("hidden", !state.session.isDispatcher);
 
   if (state.session.isDispatcher) {
     els.roleStatus.classList.add("ok");
-    els.dispatcherStrip.classList.remove("hidden");
-    els.operationsPanel.classList.remove("hidden");
-    els.vehicleStatusBar.classList.add("hidden");
     state.settings.fleetVisible = true;
-    syncFleetPanel();
-    setGPSStatus("Operationsvisning", "ok");
-  } else {
-    els.dispatcherStrip.classList.add("hidden");
-    els.operationsPanel.classList.add("hidden");
-    els.vehicleStatusBar.classList.remove("hidden");
+    setGPSStatus("Dispatcher mode", "ok");
   }
 
-  updateCurrentStatusUI();
+  syncStatusButton();
+  syncFleetPanel();
 
   showMapLoading("Indlæser kort, GPS og Firebase");
   hideMapError();
@@ -338,8 +340,9 @@ function openMainApp() {
     if (state.map) {
       state.map.setView(FESTIVAL_CENTER, MAP_FALLBACK_ZOOM, { animate: false });
     }
-    hideMapLoading();
   }
+
+  uploadPosition();
 }
 
 async function logout() {
@@ -348,39 +351,50 @@ async function logout() {
   stopGPS();
   stopGPSHealthWatch();
 
-  unsubscribeAll();
+  if (state.unsubscribeVehicles) {
+    state.unsubscribeVehicles();
+    state.unsubscribeVehicles = null;
+  }
 
-  state.otherVehicleMarkers.forEach((marker) => {
+  if (state.unsubscribeDispatch) {
+    state.unsubscribeDispatch();
+    state.unsubscribeDispatch = null;
+  }
+
+  if (state.unsubscribeEvents) {
+    state.unsubscribeEvents();
+    state.unsubscribeEvents = null;
+  }
+
+  state.vehicleMarkers.forEach((marker) => {
     if (state.map) state.map.removeLayer(marker);
   });
-  state.otherVehicleMarkers.clear();
 
-  state.incidentMarkers.forEach((marker) => {
+  state.eventMarkers.forEach((marker) => {
     if (state.map) state.map.removeLayer(marker);
   });
-  state.incidentMarkers.clear();
 
+  state.vehicleMarkers.clear();
+  state.eventMarkers.clear();
   state.vehiclesData = {};
-  state.incidentsData = {};
+  state.eventsData = {};
   state.currentLatLng = null;
-  state.currentSpeed = 0;
-  state.currentHeading = 0;
-  state.lastPositionTime = 0;
-  state.lastUploadedLatLng = null;
-  state.lastUploadAt = 0;
+  state.targetLatLng = null;
+  state.dispatcherSelectedLatLng = null;
+  state.selectedEventId = null;
   state.activeDispatchId = null;
   state.activeDispatchData = null;
-  state.dispatchTargetId = null;
-  state.selectedIncidentLatLng = null;
-  state.currentVehicleStatus = "ledig";
-
-  if (state.myMarker && state.map) {
-    state.map.removeLayer(state.myMarker);
-  }
-  state.myMarker = null;
+  state.lastUploadedLatLng = null;
+  state.lastUploadAt = 0;
+  state.userMovedMap = false;
+  state.lastPositionTime = 0;
+  state.pendingMapLatLng = null;
 
   clearWaypoint();
   hideIncomingDispatch();
+  renderFleetList();
+  renderEventsList();
+  updateNearestSuggestion(null);
 
   localStorage.removeItem(SESSION_KEY);
   state.session = null;
@@ -388,22 +402,8 @@ async function logout() {
   els.loginForm.reset();
   els.loginScreen.classList.remove("hidden");
   els.mainScreen.classList.add("hidden");
+  els.body.classList.remove("dispatcher-mode");
   setGPSStatus("Venter på GPS", "");
-}
-
-function unsubscribeAll() {
-  if (state.unsubscribeVehicles) {
-    state.unsubscribeVehicles();
-    state.unsubscribeVehicles = null;
-  }
-  if (state.unsubscribeDispatch) {
-    state.unsubscribeDispatch();
-    state.unsubscribeDispatch = null;
-  }
-  if (state.unsubscribeIncidents) {
-    state.unsubscribeIncidents();
-    state.unsubscribeIncidents = null;
-  }
 }
 
 function handlePageHide() {
@@ -473,19 +473,17 @@ function initMap() {
     state.tileLayer.addTo(state.map);
 
     state.map.on("click", (event) => {
-      if (state.session?.isDispatcher && els.incidentModal && !els.incidentModal.classList.contains("hidden")) {
-        setIncidentDraftLatLng(event.latlng);
-        return;
-      }
-      setWaypoint(event.latlng);
+      openWaypointChoiceModal(event.latlng);
     });
 
     state.map.on("dragstart", () => {
       state.userMovedMap = true;
+      state.dispatcherSelectedLatLng = null;
     });
 
     state.map.on("zoomstart", () => {
       state.userMovedMap = true;
+      state.dispatcherSelectedLatLng = null;
     });
 
     state.map.on("zoomend", () => {
@@ -499,6 +497,7 @@ function initMap() {
       hideMapLoading();
       setMapStatus(navigator.onLine ? "Kort klar" : "Offline kort", navigator.onLine ? "ok" : "warn");
     }, 700);
+
   } catch (error) {
     console.error("Map init fejl:", error);
     showMapError("Kortet kunne ikke startes.");
@@ -531,33 +530,82 @@ function scheduleMapResize() {
   });
 }
 
+function openWaypointChoiceModal(latlng) {
+  state.pendingMapLatLng = latlng;
+  els.waypointChoiceModal.classList.remove("hidden");
+}
+
+function closeWaypointChoiceModal() {
+  state.pendingMapLatLng = null;
+  els.waypointChoiceModal.classList.add("hidden");
+}
+
+function createQuickWaypointFromPending() {
+  if (!state.pendingMapLatLng) return;
+  setWaypoint(state.pendingMapLatLng);
+  closeWaypointChoiceModal();
+}
+
+function openEventModalFromPending() {
+  if (!state.pendingMapLatLng) return;
+  els.waypointChoiceModal.classList.add("hidden");
+  els.eventDescriptionInput.value = "";
+  els.eventModal.classList.remove("hidden");
+}
+
+function closeEventModal() {
+  state.pendingMapLatLng = null;
+  els.eventModal.classList.add("hidden");
+}
+
 function setWaypoint(latlng) {
   if (!state.map) return;
 
   state.targetLatLng = latlng;
 
+  const icon = L.divIcon({
+    className: "",
+    html: `<div class="quick-waypoint-marker"></div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13]
+  });
+
   if (!state.targetMarker) {
-    state.targetMarker = L.marker(latlng).addTo(state.map);
+    state.targetMarker = L.marker(latlng, { icon }).addTo(state.map);
     state.targetMarker.on("click", (event) => {
       if (event.originalEvent) {
         L.DomEvent.stopPropagation(event);
       }
-      clearWaypoint();
+      openQuickWaypointPopup();
     });
   } else {
     state.targetMarker.setLatLng(latlng);
+    state.targetMarker.setIcon(icon);
   }
 
-  updateHUD();
+  openQuickWaypointPopup();
+}
+
+function openQuickWaypointPopup() {
+  if (!state.targetMarker || !state.targetLatLng) return;
+
+  state.targetMarker.bindPopup(`
+    <strong>Hurtigt waypoint</strong><br>
+    Lat: ${state.targetLatLng.lat.toFixed(5)}<br>
+    Lon: ${state.targetLatLng.lng.toFixed(5)}
+    <div class="popup-actions">
+      <button class="popup-btn" data-popup-action="clearWaypoint">Fjern waypoint</button>
+    </div>
+  `).openPopup();
 }
 
 function clearWaypoint() {
   if (state.targetMarker && state.map) {
     state.map.removeLayer(state.targetMarker);
   }
+
   state.targetMarker = null;
   state.targetLatLng = null;
-  updateHUD();
 }
 
 function centerMapOnContext() {
@@ -565,13 +613,19 @@ function centerMapOnContext() {
 
   if (!state.map) return;
 
-  if (state.session?.isDispatcher && state.selectedIncidentLatLng) {
-    state.map.setView(state.selectedIncidentLatLng, Math.max(state.map.getZoom(), 19), { animate: true });
+  if (state.session?.isDispatcher && state.dispatcherSelectedLatLng) {
+    state.map.setView(state.dispatcherSelectedLatLng, Math.max(state.map.getZoom(), 19), { animate: true });
     return;
   }
 
   if (state.currentLatLng) {
     state.map.setView(state.currentLatLng, Math.max(state.map.getZoom(), 18), { animate: true });
+    return;
+  }
+
+  if (state.selectedEventId && state.eventsData[state.selectedEventId]) {
+    const event = state.eventsData[state.selectedEventId];
+    state.map.setView([event.lat, event.lon], Math.max(state.map.getZoom(), 18), { animate: true });
     return;
   }
 
@@ -723,8 +777,7 @@ function handlePosition(position) {
     setGPSStatus(`GPS svag · ±${accuracy} m`, "warn");
   }
 
-  updateHUD();
-  updateMyMarker();
+  updateUserMarker();
   maybeFollowVehicle(latlng);
   preloadNearbyTiles(latlng);
   uploadPosition();
@@ -768,55 +821,106 @@ function tryFallbackGetCurrentPosition() {
   );
 }
 
-function updateMyMarker() {
+function updateUserMarker() {
   if (!state.map || !state.currentLatLng) return;
 
   const icon = L.divIcon({
     className: "",
-    html: createVehicleMarkerHTML(state.currentHeading, true, state.currentVehicleStatus),
-    iconSize: [52, 52],
-    iconAnchor: [26, 26]
+    html: createVehicleMarkerHTML(state.currentHeading, true, state.settings.vehicleStatus),
+    iconSize: [54, 54],
+    iconAnchor: [27, 27]
   });
 
-  if (!state.myMarker) {
-    state.myMarker = L.marker(state.currentLatLng, {
+  if (!state.userMarker) {
+    state.userMarker = L.marker(state.currentLatLng, {
       icon,
       zIndexOffset: 1000
     }).addTo(state.map);
 
-    state.myMarker.bindPopup(() => `
+    state.userMarker.bindPopup(() => `
       <strong>Eget køretøj</strong><br>
       Hold: ${escapeHtml(state.session.hold)}<br>
       Køretøj: ${escapeHtml(state.session.vehicle)}<br>
-      Status: ${escapeHtml(capitalize(state.currentVehicleStatus))}<br>
-      Hastighed: ${Math.round(state.currentSpeed)} km/t
+      Status: ${escapeHtml(capitalizeStatus(state.settings.vehicleStatus))}
     `);
   } else {
-    state.myMarker.setLatLng(state.currentLatLng);
-    state.myMarker.setIcon(icon);
+    state.userMarker.setLatLng(state.currentLatLng);
+    state.userMarker.setIcon(icon);
   }
+}
+
+function createVehicleMarkerHTML(heading = 0, isPrimary = false, status = "ledig") {
+  const wrapperClass = isPrimary ? "vehicle-marker" : "other-vehicle-marker";
+  const size = isPrimary ? 54 : 42;
+  const primaryColorA = status === "optaget" ? "#ef4444" : "#22c55e";
+  const primaryColorB = status === "optaget" ? "#b91c1c" : "#15803d";
+  const secondaryColorA = status === "optaget" ? "#f97316" : "#38bdf8";
+  const secondaryColorB = status === "optaget" ? "#dc2626" : "#0ea5e9";
+  const colorA = isPrimary ? primaryColorA : secondaryColorA;
+  const colorB = isPrimary ? primaryColorB : secondaryColorB;
+  const gradientId = `rfVehicle${isPrimary ? "A" : "B"}${status}`;
+
+  const svg = `
+    <svg viewBox="0 0 64 64" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs>
+        <linearGradient id="${gradientId}" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${colorA}"/>
+          <stop offset="100%" stop-color="${colorB}"/>
+        </linearGradient>
+      </defs>
+      <circle cx="32" cy="32" r="28" fill="url(#${gradientId})" stroke="white" stroke-width="3"/>
+      <path d="M18 36L21 26C22 23 24 21 27 21H40C43 21 45 23 46 26L48 32H51C53 32 54 33 54 35V41C54 43 53 44 51 44H49C49 47 47 49 44 49C41 49 39 47 39 44H25C25 47 23 49 20 49C17 49 15 47 15 44H13C11 44 10 43 10 41V37C10 34 12 32 15 32H17L18 36Z" fill="white"/>
+      <rect x="28" y="25" width="10" height="10" rx="1.5" fill="${isPrimary ? "#111827" : "#0284c7"}"/>
+      <rect x="31.5" y="22" width="3" height="16" fill="white"/>
+      <rect x="25" y="28.5" width="16" height="3" fill="white"/>
+      <rect x="18" y="34" width="10" height="5" rx="1" fill="#cbd5e1"/>
+      <rect x="39" y="34" width="10" height="5" rx="1" fill="#cbd5e1"/>
+      <circle cx="20" cy="44" r="3.5" fill="#0f172a"/>
+      <circle cx="44" cy="44" r="3.5" fill="#0f172a"/>
+      <path d="M32 8L37 16H27Z" fill="#f8fafc"/>
+    </svg>
+  `;
+
+  return `
+    <div class="${wrapperClass}">
+      <div class="vehicle-rotator" style="transform: rotate(${Math.round(heading)}deg)">
+        ${svg}
+      </div>
+    </div>
+  `;
 }
 
 /* =====================================================
    VEHICLE STATUS
 ===================================================== */
 
-function setVehicleStatus(status) {
-  state.currentVehicleStatus = status;
-  updateCurrentStatusUI();
-  updateMyMarker();
-  uploadPosition(true);
+function toggleVehicleStatus() {
+  if (state.session?.isDispatcher) return;
+
+  state.settings.vehicleStatus = state.settings.vehicleStatus === "ledig" ? "optaget" : "ledig";
+  saveSettings();
+  syncStatusButton();
+  updateUserMarker();
+  uploadPosition();
 }
 
-function updateCurrentStatusUI() {
-  els.currentVehicleStatusText.textContent = capitalize(state.currentVehicleStatus);
+function syncStatusButton() {
+  const status = state.settings.vehicleStatus || "ledig";
+  els.statusBtn.classList.remove("status-ledig", "status-optaget");
+  els.statusBtn.classList.add(status === "optaget" ? "status-optaget" : "status-ledig");
+  els.statusBtnText.textContent = status === "optaget" ? "Optaget" : "Ledig";
+  els.statusBtn.disabled = Boolean(state.session?.isDispatcher);
+
+  if (state.session?.isDispatcher) {
+    els.statusBtnText.textContent = "Kontor";
+  }
 }
 
 /* =====================================================
    FIREBASE VEHICLES
 ===================================================== */
 
-async function uploadPosition(force = false) {
+async function uploadPosition() {
   if (!state.session || state.session.isDispatcher || !state.currentLatLng) return;
 
   const now = Date.now();
@@ -827,7 +931,7 @@ async function uploadPosition(force = false) {
   const dueByTime = now - state.lastUploadAt >= POSITION_UPLOAD_MIN_INTERVAL_MS;
   const dueByDistance = distanceSinceLastUpload >= POSITION_UPLOAD_MIN_DISTANCE_M;
 
-  if (!force && !dueByTime && !dueByDistance) return;
+  if (!dueByTime && !dueByDistance) return;
 
   state.lastUploadAt = now;
   state.lastUploadedLatLng = state.currentLatLng;
@@ -840,7 +944,7 @@ async function uploadPosition(force = false) {
       lon: state.currentLatLng.lng,
       speed: Math.round(state.currentSpeed),
       heading: Math.round(state.currentHeading),
-      status: state.currentVehicleStatus,
+      status: state.settings.vehicleStatus || "ledig",
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       role: "vehicle"
     });
@@ -855,7 +959,7 @@ async function uploadPosition(force = false) {
 function startFirebaseSubscriptions() {
   subscribeVehicles();
   subscribeDispatches();
-  subscribeIncidents();
+  subscribeEvents();
 }
 
 function subscribeVehicles() {
@@ -876,29 +980,36 @@ function subscribeVehicles() {
         const updatedMs = data.updatedAt?.toMillis ? data.updatedAt.toMillis() : now;
         if (now - updatedMs > VEHICLE_STALE_MS) return;
 
-        freshVehicles[doc.id] = data;
+        freshVehicles[doc.id] = {
+          ...data,
+          status: data.status === "optaget" ? "optaget" : "ledig"
+        };
 
         if (doc.id === state.session?.id) return;
 
         seen.add(doc.id);
-        renderOtherVehicleMarker(doc.id, data);
+        renderOtherVehicleMarker(doc.id, freshVehicles[doc.id]);
       });
 
       state.vehiclesData = freshVehicles;
 
-      Array.from(state.otherVehicleMarkers.keys()).forEach((id) => {
+      Array.from(state.vehicleMarkers.keys()).forEach((id) => {
         if (!seen.has(id)) {
-          const marker = state.otherVehicleMarkers.get(id);
+          const marker = state.vehicleMarkers.get(id);
           if (state.map && marker) {
             state.map.removeLayer(marker);
           }
-          state.otherVehicleMarkers.delete(id);
+          state.vehicleMarkers.delete(id);
         }
       });
 
       renderFleetList();
-      renderOperationsVehicleList();
-      updateDispatcherStats();
+      renderOpsVehicleList();
+      updateDispatcherCounts();
+
+      if (state.selectedEventId) {
+        updateNearestSuggestion(state.selectedEventId);
+      }
     },
     (error) => {
       console.error("Vehicles listener fejl:", error);
@@ -911,203 +1022,398 @@ function renderOtherVehicleMarker(id, vehicle) {
   if (!state.map) return;
 
   const latlng = L.latLng(vehicle.lat, vehicle.lon);
-
   const icon = L.divIcon({
     className: "",
     html: createVehicleMarkerHTML(vehicle.heading || 0, false, vehicle.status || "ledig"),
-    iconSize: [40, 40],
-    iconAnchor: [20, 20]
+    iconSize: [42, 42],
+    iconAnchor: [21, 21]
   });
 
-  if (!state.otherVehicleMarkers.has(id)) {
+  const popupHtml = `
+    <strong>Hold ${escapeHtml(vehicle.hold || "-")} · ${escapeHtml(vehicle.vehicle || "-")}</strong><br>
+    Status: ${escapeHtml(capitalizeStatus(vehicle.status || "ledig"))}<br>
+    Hastighed: ${escapeHtml(String(vehicle.speed || 0))} km/t<br>
+    Retning: ${escapeHtml(headingToCompass(vehicle.heading || 0))}
+  `;
+
+  if (!state.vehicleMarkers.has(id)) {
     const marker = L.marker(latlng, { icon }).addTo(state.map);
-    marker.bindPopup(() => `
-      <strong>Hold ${escapeHtml(vehicle.hold || "-")} · ${escapeHtml(vehicle.vehicle || "-")}</strong><br>
-      Status: ${escapeHtml(capitalize(vehicle.status || "ledig"))}<br>
-      Hastighed: ${escapeHtml(String(vehicle.speed || 0))} km/t<br>
-      Retning: ${escapeHtml(headingToCompass(vehicle.heading || 0))}
-    `);
-    state.otherVehicleMarkers.set(id, marker);
+    marker.bindPopup(popupHtml);
+    state.vehicleMarkers.set(id, marker);
   } else {
-    const marker = state.otherVehicleMarkers.get(id);
+    const marker = state.vehicleMarkers.get(id);
     marker.setLatLng(latlng);
     marker.setIcon(icon);
+    marker.bindPopup(popupHtml);
   }
 }
 
-/* =====================================================
-   INCIDENTS
-===================================================== */
+function renderFleetList() {
+  const rows = getVehicleRows();
 
-function subscribeIncidents() {
-  if (state.unsubscribeIncidents) {
-    state.unsubscribeIncidents();
+  els.fleetCount.textContent = String(rows.length);
+
+  if (!rows.length) {
+    els.fleetList.innerHTML = `
+      <div class="fleet-item">
+        <div class="fleet-item-main">
+          <div class="fleet-item-title">Ingen andre aktive køretøjer</div>
+          <div class="fleet-item-meta">Når andre logger ind, vises de her</div>
+        </div>
+      </div>
+    `;
+    return;
   }
 
-  state.unsubscribeIncidents = db.collection("incidents").onSnapshot(
+  els.fleetList.innerHTML = rows.map((row) => `
+    <div class="fleet-item">
+      <div class="fleet-item-main" data-lat="${row.lat}" data-lon="${row.lon}">
+        <div class="fleet-item-title">Hold ${escapeHtml(row.hold)} · ${escapeHtml(row.vehicle)}</div>
+        <div class="fleet-item-meta">${row.speed} km/t · ${headingToCompass(row.heading)} · ${escapeHtml(capitalizeStatus(row.status))}</div>
+        <div class="status-badge ${escapeHtml(row.status)}">${escapeHtml(capitalizeStatus(row.status))}</div>
+      </div>
+      <button class="center-vehicle-btn" data-lat="${row.lat}" data-lon="${row.lon}" title="Center på køretøj">◎</button>
+      <button class="dispatch-btn" data-target-id="${escapeHtml(row.id)}" data-target-label="Hold ${escapeHtml(row.hold)} · ${escapeHtml(row.vehicle)}" title="Send melding">📩</button>
+    </div>
+  `).join("");
+
+  bindVehicleListEvents(els.fleetList);
+}
+
+function renderOpsVehicleList() {
+  const rows = getVehicleRows();
+  els.opsVehicleCount.textContent = String(rows.length);
+
+  if (!rows.length) {
+    els.opsVehicleList.innerHTML = `<div class="ops-empty">Ingen aktive køretøjer.</div>`;
+    return;
+  }
+
+  els.opsVehicleList.innerHTML = rows.map((row) => `
+    <div class="ops-item">
+      <div class="ops-item-main" data-lat="${row.lat}" data-lon="${row.lon}">
+        <div class="ops-item-title">Hold ${escapeHtml(row.hold)} · ${escapeHtml(row.vehicle)}</div>
+        <div class="ops-item-meta">${row.speed} km/t · ${headingToCompass(row.heading)}</div>
+        <div class="status-badge ${escapeHtml(row.status)}">${escapeHtml(capitalizeStatus(row.status))}</div>
+      </div>
+      <div class="button-row">
+        <button class="center-vehicle-btn" data-lat="${row.lat}" data-lon="${row.lon}" title="Center">◎</button>
+        <button class="dispatch-btn" data-target-id="${escapeHtml(row.id)}" data-target-label="Hold ${escapeHtml(row.hold)} · ${escapeHtml(row.vehicle)}" title="Send melding">📩</button>
+      </div>
+    </div>
+  `).join("");
+
+  bindVehicleListEvents(els.opsVehicleList);
+}
+
+function bindVehicleListEvents(container) {
+  container.querySelectorAll(".fleet-item-main, .ops-item-main, .center-vehicle-btn").forEach((element) => {
+    element.addEventListener("click", () => {
+      const lat = Number(element.dataset.lat);
+      const lon = Number(element.dataset.lon);
+      if (!Number.isNaN(lat) && !Number.isNaN(lon) && state.map) {
+        state.dispatcherSelectedLatLng = L.latLng(lat, lon);
+        state.map.setView(state.dispatcherSelectedLatLng, Math.max(state.map.getZoom(), 19), { animate: true });
+      }
+    });
+  });
+
+  container.querySelectorAll(".dispatch-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      openDispatchModal(button.dataset.targetId, button.dataset.targetLabel);
+    });
+  });
+}
+
+function getVehicleRows() {
+  const rows = Object.entries(state.vehiclesData)
+    .filter(([id]) => id !== state.session?.id)
+    .map(([id, vehicle]) => ({
+      id,
+      hold: vehicle.hold || "-",
+      vehicle: vehicle.vehicle || "-",
+      speed: vehicle.speed || 0,
+      heading: vehicle.heading || 0,
+      lat: vehicle.lat,
+      lon: vehicle.lon,
+      status: vehicle.status || "ledig"
+    }));
+
+  rows.sort((a, b) => {
+    const aLabel = `${a.hold}-${a.vehicle}`;
+    const bLabel = `${b.hold}-${b.vehicle}`;
+    return aLabel.localeCompare(bLabel, "da");
+  });
+
+  return rows;
+}
+
+/* =====================================================
+   EVENTS
+===================================================== */
+
+function subscribeEvents() {
+  if (state.unsubscribeEvents) {
+    state.unsubscribeEvents();
+  }
+
+  state.unsubscribeEvents = db.collection("events").onSnapshot(
     (snapshot) => {
       const seen = new Set();
-      const freshIncidents = {};
+      const freshEvents = {};
 
       snapshot.forEach((doc) => {
-        const incident = doc.data();
-        if (!incident) return;
+        const data = doc.data();
+        if (!data) return;
 
-        freshIncidents[doc.id] = incident;
+        freshEvents[doc.id] = data;
         seen.add(doc.id);
-        renderIncidentMarker(doc.id, incident);
+        renderEventMarker(doc.id, data);
       });
 
-      state.incidentsData = freshIncidents;
+      state.eventsData = freshEvents;
 
-      Array.from(state.incidentMarkers.keys()).forEach((id) => {
+      Array.from(state.eventMarkers.keys()).forEach((id) => {
         if (!seen.has(id)) {
-          const marker = state.incidentMarkers.get(id);
+          const marker = state.eventMarkers.get(id);
           if (state.map && marker) {
             state.map.removeLayer(marker);
           }
-          state.incidentMarkers.delete(id);
+          state.eventMarkers.delete(id);
         }
       });
 
-      renderOperationsIncidentList();
-      updateDispatcherStats();
+      renderEventsList();
+      updateDispatcherCounts();
+
+      if (state.selectedEventId && !state.eventsData[state.selectedEventId]) {
+        state.selectedEventId = null;
+        updateNearestSuggestion(null);
+      } else if (state.selectedEventId) {
+        updateNearestSuggestion(state.selectedEventId);
+      }
     },
     (error) => {
-      console.error("Incidents listener fejl:", error);
+      console.error("Events listener fejl:", error);
     }
   );
 }
 
-function renderIncidentMarker(id, incident) {
-  if (!state.map) return;
+async function submitEvent(event) {
+  event.preventDefault();
 
-  const latlng = L.latLng(incident.lat, incident.lon);
-  const icon = incidentIcon(incident.type);
+  const description = sanitizeText(els.eventDescriptionInput.value);
+  if (!description || !state.pendingMapLatLng || !state.session) return;
 
-  if (!state.incidentMarkers.has(id)) {
-    const marker = L.marker(latlng, { icon }).addTo(state.map);
-    marker.bindPopup(() => `
-      <strong>${escapeHtml(incidentTypeLabel(incident.type))}</strong><br>
-      ${escapeHtml(incident.description || "-")}<br>
-      ${escapeHtml(incident.locationText || "-")}
-    `);
-    marker.on("click", () => {
-      state.selectedIncidentLatLng = latlng;
+  try {
+    await db.collection("events").add({
+      lat: state.pendingMapLatLng.lat,
+      lon: state.pendingMapLatLng.lng,
+      description,
+      createdBy: `Hold ${state.session.hold} · ${state.session.vehicle}`,
+      createdById: state.session.id,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    state.incidentMarkers.set(id, marker);
-  } else {
-    const marker = state.incidentMarkers.get(id);
-    marker.setLatLng(latlng);
-    marker.setIcon(icon);
+
+    closeEventModal();
+  } catch (error) {
+    console.error("Kunne ikke gemme hændelse:", error);
+    alert("Kunne ikke gemme hændelse.");
   }
 }
 
-function incidentIcon(type) {
-  let emoji = "⚠️";
-  if (type === "medical") emoji = "🚑";
-  if (type === "fire") emoji = "🔥";
-  if (type === "security") emoji = "⚠️";
+function renderEventMarker(id, eventData) {
+  if (!state.map || !isFinite(eventData.lat) || !isFinite(eventData.lon)) return;
 
-  return L.divIcon({
+  const latlng = L.latLng(eventData.lat, eventData.lon);
+  const icon = L.divIcon({
     className: "",
-    html: `<div style="font-size:22px;">${emoji}</div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12]
+    html: `<div class="event-marker"><div class="event-pin">!</div></div>`,
+    iconSize: [44, 44],
+    iconAnchor: [22, 22]
+  });
+
+  const popupHtml = `
+    <strong>🚑 Hændelse</strong><br>
+    ${escapeHtml(eventData.description || "-")}<br>
+    Oprettet af: ${escapeHtml(eventData.createdBy || "-")}
+    <div class="popup-actions">
+      <button class="popup-btn" data-popup-action="selectEvent" data-event-id="${escapeHtml(id)}">Vælg</button>
+      <button class="popup-btn" data-popup-action="deleteEvent" data-event-id="${escapeHtml(id)}">Fjern</button>
+    </div>
+  `;
+
+  if (!state.eventMarkers.has(id)) {
+    const marker = L.marker(latlng, { icon }).addTo(state.map);
+    marker.bindPopup(popupHtml);
+    marker.on("click", () => {
+      selectEvent(id);
+    });
+    state.eventMarkers.set(id, marker);
+  } else {
+    const marker = state.eventMarkers.get(id);
+    marker.setLatLng(latlng);
+    marker.setIcon(icon);
+    marker.bindPopup(popupHtml);
+  }
+}
+
+function renderEventsList() {
+  const rows = Object.entries(state.eventsData)
+    .map(([id, eventData]) => ({
+      id,
+      description: eventData.description || "-",
+      lat: eventData.lat,
+      lon: eventData.lon,
+      createdBy: eventData.createdBy || "-"
+    }))
+    .sort((a, b) => a.description.localeCompare(b.description, "da"));
+
+  els.dispatcherEventCount.textContent = String(rows.length);
+  els.opsEventCount.textContent = String(rows.length);
+
+  if (!rows.length) {
+    els.dispatcherEventsList.innerHTML = `<div class="ops-empty">Ingen hændelser lige nu.</div>`;
+    return;
+  }
+
+  els.dispatcherEventsList.innerHTML = rows.map((row) => `
+    <div class="ops-item">
+      <div class="ops-item-main" data-event-id="${escapeHtml(row.id)}">
+        <div class="ops-item-title">${escapeHtml(row.description)}</div>
+        <div class="ops-item-meta">${escapeHtml(row.createdBy)}</div>
+      </div>
+      <div class="button-row">
+        <button class="select-event-btn" data-event-id="${escapeHtml(row.id)}" title="Vælg hændelse">◎</button>
+        <button class="delete-event-btn" data-event-id="${escapeHtml(row.id)}" title="Fjern hændelse">🗑</button>
+      </div>
+    </div>
+  `).join("");
+
+  els.dispatcherEventsList.querySelectorAll(".ops-item-main, .select-event-btn").forEach((element) => {
+    element.addEventListener("click", () => {
+      selectEvent(element.dataset.eventId);
+    });
+  });
+
+  els.dispatcherEventsList.querySelectorAll(".delete-event-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      deleteEvent(button.dataset.eventId);
+    });
   });
 }
 
-function openIncidentModalFromCurrentContext() {
-  if (!state.session?.isDispatcher) return;
+function selectEvent(eventId) {
+  const eventData = state.eventsData[eventId];
+  if (!eventData || !state.map) return;
 
-  state.selectedIncidentLatLng = state.currentLatLng || state.targetLatLng || null;
+  state.selectedEventId = eventId;
+  state.dispatcherSelectedLatLng = L.latLng(eventData.lat, eventData.lon);
+  state.map.setView(state.dispatcherSelectedLatLng, Math.max(state.map.getZoom(), 18), { animate: true });
+  updateNearestSuggestion(eventId);
 
-  if (state.selectedIncidentLatLng) {
-    setIncidentDraftLatLng(state.selectedIncidentLatLng);
-  } else {
-    els.incidentCoordinatesInput.value = "Vælg placering på kortet";
-    els.incidentNearestSuggestionBox.classList.add("hidden");
-  }
-
-  els.incidentDescriptionInput.value = "";
-  els.incidentLocationTextInput.value = "";
-  els.incidentTypeInput.value = "medical";
-  els.incidentModal.classList.remove("hidden");
-}
-
-function closeIncidentModal() {
-  els.incidentModal.classList.add("hidden");
-}
-
-function setIncidentDraftLatLng(latlng) {
-  state.selectedIncidentLatLng = latlng;
-  els.incidentCoordinatesInput.value = `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
-
-  const nearest = findNearestAvailableVehicle(latlng.lat, latlng.lng);
-  if (nearest) {
-    els.incidentNearestSuggestionBox.classList.remove("hidden");
-    els.incidentNearestSuggestionText.textContent =
-      `Hold ${nearest.hold} · ${nearest.vehicle} – ${Math.round(nearest.distance)} meter`;
-  } else {
-    els.incidentNearestSuggestionBox.classList.add("hidden");
+  const marker = state.eventMarkers.get(eventId);
+  if (marker) {
+    marker.openPopup();
   }
 }
 
-async function submitIncident(event) {
-  event.preventDefault();
-
-  if (!state.session?.isDispatcher || !state.selectedIncidentLatLng) return;
-
-  const type = els.incidentTypeInput.value;
-  const description = sanitizeText(els.incidentDescriptionInput.value);
-  const locationText = sanitizeText(els.incidentLocationTextInput.value);
-
-  if (!description) return;
+async function deleteEvent(eventId) {
+  if (!eventId) return;
 
   try {
-    await db.collection("incidents").add({
-      type,
-      description,
-      locationText,
-      lat: state.selectedIncidentLatLng.lat,
-      lon: state.selectedIncidentLatLng.lng,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      createdBy: state.session.id
-    });
-
-    closeIncidentModal();
+    await db.collection("events").doc(eventId).delete();
   } catch (error) {
-    console.error("Kunne ikke oprette hændelse:", error);
-    alert("Kunne ikke oprette hændelse.");
+    console.error("Kunne ikke slette hændelse:", error);
+    alert("Kunne ikke slette hændelse.");
   }
+}
+
+function updateNearestSuggestion(eventId) {
+  if (!eventId || !state.eventsData[eventId]) {
+    els.nearestVehicleSuggestion.textContent = "Vælg en hændelse for at få forslag til nærmeste ledige køretøj.";
+    return;
+  }
+
+  const eventData = state.eventsData[eventId];
+  const target = L.latLng(eventData.lat, eventData.lon);
+
+  const availableVehicles = Object.entries(state.vehiclesData)
+    .filter(([id, vehicle]) => id !== state.session?.id && vehicle.status !== "optaget" && isFinite(vehicle.lat) && isFinite(vehicle.lon))
+    .map(([id, vehicle]) => ({
+      id,
+      label: `Hold ${vehicle.hold || "-"} · ${vehicle.vehicle || "-"}`,
+      latlng: L.latLng(vehicle.lat, vehicle.lon),
+      status: vehicle.status || "ledig"
+    }));
+
+  if (!availableVehicles.length) {
+    els.nearestVehicleSuggestion.innerHTML = `
+      <strong>Ingen ledige køretøjer</strong><br>
+      Alle køretøjer er enten optaget eller offline.
+    `;
+    return;
+  }
+
+  let best = null;
+
+  availableVehicles.forEach((vehicle) => {
+    const distance = Math.round(vehicle.latlng.distanceTo(target));
+    if (!best || distance < best.distance) {
+      best = {
+        ...vehicle,
+        distance
+      };
+    }
+  });
+
+  els.nearestVehicleSuggestion.innerHTML = `
+    <strong>Forslag:</strong><br>
+    Send ${escapeHtml(best.label)}<br>
+    Afstand: ${best.distance} meter
+    <div class="button-row">
+      <button class="suggest-dispatch-btn" id="suggestDispatchBtn" type="button">Åbn melding</button>
+    </div>
+  `;
+
+  const suggestBtn = document.getElementById("suggestDispatchBtn");
+  if (suggestBtn) {
+    suggestBtn.addEventListener("click", () => {
+      openDispatchModal(best.id, best.label);
+    });
+  }
+}
+
+function updateDispatcherCounts() {
+  const allVehicles = Object.keys(state.vehiclesData).filter((id) => id !== state.session?.id).length;
+  const availableVehicles = Object.entries(state.vehiclesData)
+    .filter(([id, vehicle]) => id !== state.session?.id && vehicle.status !== "optaget")
+    .length;
+
+  els.dispatcherVehicleCount.textContent = String(allVehicles);
+  els.dispatcherAvailableCount.textContent = String(availableVehicles);
+  els.dispatcherEventCount.textContent = String(Object.keys(state.eventsData).length);
 }
 
 /* =====================================================
    DISPATCH
 ===================================================== */
 
-function openDispatchModal(targetId, label, suggestionText = "") {
+function openDispatchModal(targetId, label) {
   state.dispatchTargetId = targetId;
-  els.dispatchTargetInput.value = label || targetId;
+  state.dispatchTargetLabel = label || targetId;
+  els.dispatchTargetInput.value = state.dispatchTargetLabel;
   els.dispatchMessageInput.value = "";
   els.dispatchDestinationInput.value = "";
-  els.dispatchAttachWaypointInput.checked = Boolean(state.targetLatLng);
-  els.dispatchAttachWaypointInput.disabled = !state.targetLatLng;
-
-  if (suggestionText) {
-    els.nearestSuggestionBox.classList.remove("hidden");
-    els.nearestSuggestionText.textContent = suggestionText;
-  } else {
-    els.nearestSuggestionBox.classList.add("hidden");
-  }
-
+  els.dispatchAttachWaypointInput.checked = Boolean(state.targetLatLng || state.selectedEventId);
+  els.dispatchAttachWaypointInput.disabled = !state.targetLatLng && !state.selectedEventId;
   els.dispatchModal.classList.remove("hidden");
 }
 
 function closeDispatchModal() {
   state.dispatchTargetId = null;
+  state.dispatchTargetLabel = "";
   els.dispatchModal.classList.add("hidden");
-  els.nearestSuggestionBox.classList.add("hidden");
 }
 
 async function submitDispatchMessage(event) {
@@ -1117,27 +1423,30 @@ async function submitDispatchMessage(event) {
 
   const message = sanitizeText(els.dispatchMessageInput.value);
   const destination = sanitizeText(els.dispatchDestinationInput.value);
-  const attachWaypoint = Boolean(els.dispatchAttachWaypointInput.checked && state.targetLatLng);
+
+  const activeWaypoint =
+    state.selectedEventId && state.eventsData[state.selectedEventId]
+      ? { lat: state.eventsData[state.selectedEventId].lat, lon: state.eventsData[state.selectedEventId].lon }
+      : state.targetLatLng
+        ? { lat: state.targetLatLng.lat, lon: state.targetLatLng.lng }
+        : null;
+
+  const attachWaypoint = Boolean(els.dispatchAttachWaypointInput.checked && activeWaypoint);
 
   if (!message) return;
 
   const payload = {
     targetVehicle: state.dispatchTargetId,
     fromVehicle: state.session.id,
-    fromLabel: state.session.isDispatcher
-      ? "Beredskabskontoret"
-      : `Hold ${state.session.hold} · ${state.session.vehicle}`,
+    fromLabel: `Hold ${state.session.hold} · ${state.session.vehicle}`,
     message,
     destination,
     status: "open",
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
 
-  if (attachWaypoint) {
-    payload.waypoint = {
-      lat: state.targetLatLng.lat,
-      lon: state.targetLatLng.lng
-    };
+  if (attachWaypoint && activeWaypoint) {
+    payload.waypoint = activeWaypoint;
   }
 
   try {
@@ -1161,7 +1470,10 @@ function subscribeDispatches() {
     .where("status", "==", "open")
     .onSnapshot(
       (snapshot) => {
-        if (snapshot.empty) return;
+        if (snapshot.empty) {
+          hideIncomingDispatch();
+          return;
+        }
 
         const doc = snapshot.docs[0];
         const data = doc.data();
@@ -1228,216 +1540,8 @@ function hideIncomingDispatch() {
 }
 
 /* =====================================================
-   RENDER LISTS / OPERATIONS
+   UI
 ===================================================== */
-
-function renderFleetList() {
-  const rows = Object.entries(state.vehiclesData)
-    .filter(([id]) => id !== state.session?.id)
-    .map(([id, vehicle]) => ({
-      id,
-      hold: vehicle.hold || "-",
-      vehicle: vehicle.vehicle || "-",
-      speed: vehicle.speed || 0,
-      heading: vehicle.heading || 0,
-      status: vehicle.status || "ledig",
-      lat: vehicle.lat,
-      lon: vehicle.lon
-    }));
-
-  rows.sort((a, b) => `${a.hold}-${a.vehicle}`.localeCompare(`${b.hold}-${b.vehicle}`, "da"));
-  els.fleetCount.textContent = String(rows.length);
-
-  if (!rows.length) {
-    els.fleetList.innerHTML = `
-      <div class="fleet-item">
-        <div>Ingen andre aktive køretøjer</div>
-      </div>
-    `;
-    return;
-  }
-
-  els.fleetList.innerHTML = rows.map((row) => {
-    const statusEmoji = row.status === "ledig" ? "🟢" : "🔴";
-    return `
-      <div class="fleet-item">
-        <div class="fleet-main" data-lat="${row.lat}" data-lon="${row.lon}">
-          Hold ${escapeHtml(row.hold)} · ${escapeHtml(row.vehicle)}
-        </div>
-        <div>${statusEmoji}</div>
-      </div>
-    `;
-  }).join("");
-
-  els.fleetList.querySelectorAll(".fleet-main").forEach((element) => {
-    element.addEventListener("click", () => {
-      const lat = Number(element.dataset.lat);
-      const lon = Number(element.dataset.lon);
-      if (!Number.isNaN(lat) && !Number.isNaN(lon) && state.map) {
-        state.map.setView([lat, lon], Math.max(state.map.getZoom(), 19), { animate: true });
-      }
-    });
-  });
-}
-
-function renderOperationsVehicleList() {
-  if (!state.session?.isDispatcher) return;
-
-  const rows = Object.entries(state.vehiclesData)
-    .map(([id, vehicle]) => ({
-      id,
-      hold: vehicle.hold || "-",
-      vehicle: vehicle.vehicle || "-",
-      status: vehicle.status || "ledig",
-      lat: vehicle.lat,
-      lon: vehicle.lon
-    }))
-    .sort((a, b) => `${a.hold}-${a.vehicle}`.localeCompare(`${b.hold}-${b.vehicle}`, "da"));
-
-  els.operationsVehicleCount.textContent = String(rows.length);
-
-  if (!rows.length) {
-    els.operationsVehicleList.innerHTML = `<div>Ingen aktive køretøjer</div>`;
-    return;
-  }
-
-  els.operationsVehicleList.innerHTML = rows.map((row) => {
-    const statusEmoji = row.status === "ledig" ? "🟢" : "🔴";
-    return `
-      <div class="operations-item">
-        <div>
-          <strong>Hold ${escapeHtml(row.hold)} · ${escapeHtml(row.vehicle)}</strong>
-        </div>
-        <div>${statusEmoji} ${escapeHtml(capitalize(row.status))}</div>
-        <div class="operations-actions">
-          <button class="ops-center-btn" data-lat="${row.lat}" data-lon="${row.lon}">Center</button>
-          <button class="ops-dispatch-btn" data-id="${escapeHtml(row.id)}" data-label="Hold ${escapeHtml(row.hold)} · ${escapeHtml(row.vehicle)}">Send</button>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  els.operationsVehicleList.querySelectorAll(".ops-center-btn").forEach((button) => {
-    button.addEventListener("click", () => {
-      const lat = Number(button.dataset.lat);
-      const lon = Number(button.dataset.lon);
-      if (!Number.isNaN(lat) && !Number.isNaN(lon) && state.map) {
-        state.map.setView([lat, lon], Math.max(state.map.getZoom(), 19), { animate: true });
-      }
-    });
-  });
-
-  els.operationsVehicleList.querySelectorAll(".ops-dispatch-btn").forEach((button) => {
-    button.addEventListener("click", () => {
-      const suggestion = state.selectedIncidentLatLng
-        ? findNearestAvailableVehicle(state.selectedIncidentLatLng.lat, state.selectedIncidentLatLng.lng)
-        : null;
-
-      const suggestionText = suggestion
-        ? `Foreslår Hold ${suggestion.hold} · ${suggestion.vehicle} – ${Math.round(suggestion.distance)} meter`
-        : "";
-
-      openDispatchModal(button.dataset.id, button.dataset.label, suggestionText);
-    });
-  });
-}
-
-function renderOperationsIncidentList() {
-  if (!state.session?.isDispatcher) return;
-
-  const rows = Object.entries(state.incidentsData).map(([id, incident]) => ({
-    id,
-    ...incident
-  }));
-
-  els.operationsIncidentCount.textContent = String(rows.length);
-
-  if (!rows.length) {
-    els.operationsIncidentList.innerHTML = `<div>Ingen aktive hændelser</div>`;
-    return;
-  }
-
-  els.operationsIncidentList.innerHTML = rows.map((incident) => {
-    const nearest = findNearestAvailableVehicle(incident.lat, incident.lon);
-    return `
-      <div class="operations-item">
-        <div>
-          <strong>${escapeHtml(incidentTypeLabel(incident.type))}</strong>
-        </div>
-        <div>${escapeHtml(incident.description || "-")}</div>
-        <div>${escapeHtml(incident.locationText || "-")}</div>
-        <div>${nearest ? `Nærmeste ledige: Hold ${escapeHtml(nearest.hold)} · ${escapeHtml(nearest.vehicle)} – ${Math.round(nearest.distance)} meter` : "Ingen ledige køretøjer"}</div>
-        <div class="operations-actions">
-          <button class="ops-incident-center-btn" data-lat="${incident.lat}" data-lon="${incident.lon}">Center</button>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  els.operationsIncidentList.querySelectorAll(".ops-incident-center-btn").forEach((button) => {
-    button.addEventListener("click", () => {
-      const lat = Number(button.dataset.lat);
-      const lon = Number(button.dataset.lon);
-      if (!Number.isNaN(lat) && !Number.isNaN(lon) && state.map) {
-        state.selectedIncidentLatLng = L.latLng(lat, lon);
-        state.map.setView([lat, lon], Math.max(state.map.getZoom(), 19), { animate: true });
-      }
-    });
-  });
-}
-
-function updateDispatcherStats() {
-  const vehicles = Object.entries(state.vehiclesData).filter(([id]) => id !== state.session?.id);
-  const availableVehicles = vehicles.filter(([, vehicle]) => (vehicle.status || "ledig") === "ledig");
-
-  els.dispatcherVehicleCount.textContent = String(vehicles.length);
-  els.dispatcherAvailableCount.textContent = String(availableVehicles.length);
-  els.dispatcherIncidentCount.textContent = String(Object.keys(state.incidentsData).length);
-  els.dispatcherLiveStatus.textContent = navigator.onLine ? "Live" : "Offline";
-}
-
-/* =====================================================
-   NEAREST VEHICLE
-===================================================== */
-
-function findNearestAvailableVehicle(lat, lon) {
-  const rows = Object.entries(state.vehiclesData)
-    .filter(([id]) => id !== state.session?.id)
-    .map(([, vehicle]) => vehicle)
-    .filter((vehicle) => (vehicle.status || "ledig") === "ledig" && isFinite(vehicle.lat) && isFinite(vehicle.lon));
-
-  if (!rows.length || !state.map) return null;
-
-  let nearest = null;
-  let bestDistance = Infinity;
-
-  rows.forEach((vehicle) => {
-    const distance = state.map.distance([lat, lon], [vehicle.lat, vehicle.lon]);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      nearest = { ...vehicle, distance };
-    }
-  });
-
-  return nearest;
-}
-
-/* =====================================================
-   HUD / UI
-===================================================== */
-
-function updateHUD() {
-  els.speedValue.textContent = String(Math.round(state.currentSpeed || 0));
-  els.headingValue.textContent = headingToCompass(state.currentHeading || 0);
-
-  if (state.currentLatLng && state.targetLatLng) {
-    els.distanceValue.textContent = String(Math.round(state.currentLatLng.distanceTo(state.targetLatLng)));
-  } else if (state.selectedIncidentLatLng && state.targetLatLng) {
-    els.distanceValue.textContent = String(Math.round(state.selectedIncidentLatLng.distanceTo(state.targetLatLng)));
-  } else {
-    els.distanceValue.textContent = "-";
-  }
-}
 
 function toggleFleetPanel() {
   state.settings.fleetVisible = !state.settings.fleetVisible;
@@ -1446,7 +1550,8 @@ function toggleFleetPanel() {
 }
 
 function syncFleetPanel() {
-  els.fleetPanel.classList.toggle("hidden", !state.settings.fleetVisible);
+  const shouldShow = state.session?.isDispatcher ? !els.body.classList.contains("dispatcher-mode") || window.innerWidth <= 900 : state.settings.fleetVisible;
+  els.fleetPanel.classList.toggle("hidden", !shouldShow);
 }
 
 async function toggleFullscreen() {
@@ -1466,15 +1571,12 @@ function toggleTheme() {
   const next = els.body.classList.contains("theme-dark") ? "theme-light" : "theme-dark";
   els.body.classList.remove("theme-dark", "theme-light");
   els.body.classList.add(next);
+  if (state.session?.isDispatcher) {
+    els.body.classList.add("dispatcher-mode");
+  }
   localStorage.setItem(THEME_KEY, next);
   state.settings.theme = next;
   saveSettings();
-}
-
-function restoreTheme() {
-  const saved = localStorage.getItem(THEME_KEY) || "theme-dark";
-  els.body.classList.remove("theme-dark", "theme-light");
-  els.body.classList.add(saved);
 }
 
 function showMapLoading(text) {
@@ -1514,75 +1616,31 @@ function setFirebaseStatus(message, variant = "") {
   if (variant) els.firebaseStatus.classList.add(variant);
 }
 
-function updateNetworkStatus() {
-  const online = navigator.onLine;
-  els.networkStatus.textContent = online ? "Online" : "Offline";
-  els.networkStatus.className = "status-pill muted";
-  if (!online) els.networkStatus.classList.add("warn");
-  els.dispatcherLiveStatus.textContent = online ? "Live" : "Offline";
-}
+document.addEventListener("click", (event) => {
+  const action = event.target?.dataset?.popupAction;
+  const eventId = event.target?.dataset?.eventId;
 
-function restoreSettings() {
-  const raw = localStorage.getItem(SETTINGS_KEY);
-  if (!raw) return;
-
-  try {
-    state.settings = { ...state.settings, ...JSON.parse(raw) };
-  } catch (error) {
-    console.warn("Kunne ikke læse settings:", error);
+  if (action === "clearWaypoint") {
+    clearWaypoint();
   }
-}
 
-function saveSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
-}
+  if (action === "deleteEvent" && eventId) {
+    deleteEvent(eventId);
+  }
 
-/* =====================================================
-   MARKER HTML
-===================================================== */
-
-function createVehicleMarkerHTML(heading = 0, isPrimary = false, status = "ledig") {
-  const size = isPrimary ? 52 : 40;
-  const colorA = status === "ledig" ? "#22c55e" : "#ef4444";
-  const colorB = status === "ledig" ? "#16a34a" : "#b91c1c";
-  const wrapperClass = isPrimary ? "vehicle-marker" : "other-vehicle-marker";
-
-  const svg = `
-    <svg viewBox="0 0 64 64" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <defs>
-        <linearGradient id="vehicleGradient${isPrimary ? "A" : "B"}${status}" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="${colorA}"/>
-          <stop offset="100%" stop-color="${colorB}"/>
-        </linearGradient>
-      </defs>
-      <circle cx="32" cy="32" r="28" fill="url(#vehicleGradient${isPrimary ? "A" : "B"}${status})" stroke="white" stroke-width="3"/>
-      <path d="M18 36L21 26C22 23 24 21 27 21H40C43 21 45 23 46 26L48 32H51C53 32 54 33 54 35V41C54 43 53 44 51 44H49C49 47 47 49 44 49C41 49 39 47 39 44H25C25 47 23 49 20 49C17 49 15 47 15 44H13C11 44 10 43 10 41V37C10 34 12 32 15 32H17L18 36Z" fill="white"/>
-      <rect x="28" y="25" width="10" height="10" rx="1.5" fill="${colorB}"/>
-      <rect x="31.5" y="22" width="3" height="16" fill="white"/>
-      <rect x="25" y="28.5" width="16" height="3" fill="white"/>
-      <circle cx="20" cy="44" r="3.5" fill="#0f172a"/>
-      <circle cx="44" cy="44" r="3.5" fill="#0f172a"/>
-      <path d="M32 8L37 16H27Z" fill="#f8fafc"/>
-    </svg>
-  `;
-
-  return `
-    <div class="${wrapperClass}">
-      <div class="vehicle-rotator" style="transform: rotate(${Math.round(heading)}deg)">
-        ${svg}
-      </div>
-    </div>
-  `;
-}
+  if (action === "selectEvent" && eventId) {
+    selectEvent(eventId);
+  }
+});
 
 /* =====================================================
-   OFFLINE TILES / SERVICE WORKER
+   OFFLINE TILE PRELOAD
 ===================================================== */
 
 function preloadNearbyTiles(latlng) {
-  if (!navigator.onLine) return;
+  if (!navigator.onLine || !state.map) return;
 
-  const zoom = Math.max(17, Math.min(19, state.map ? state.map.getZoom() : 18));
+  const zoom = Math.max(17, Math.min(19, state.map.getZoom()));
   const center = latLngToTile(latlng.lat, latlng.lng, zoom);
   const radius = 1;
 
@@ -1605,12 +1663,16 @@ function latLngToTile(lat, lon, zoom) {
   return { x, y };
 }
 
+/* =====================================================
+   SERVICE WORKER INLINE
+===================================================== */
+
 function registerServiceWorkerInline() {
   if (!("serviceWorker" in navigator)) return;
 
   const swCode = `
-    const APP_CACHE = "sammap-v7-app-cache";
-    const TILE_CACHE = "sammap-v7-tile-cache";
+    const APP_CACHE = "rf-v7-app-cache";
+    const TILE_CACHE = "rf-v7-tile-cache";
     const APP_ASSETS = [
       "./",
       "./index.html",
@@ -1634,7 +1696,9 @@ function registerServiceWorkerInline() {
       event.waitUntil(
         caches.keys().then((keys) =>
           Promise.all(
-            keys.filter((key) => ![APP_CACHE, TILE_CACHE].includes(key)).map((key) => caches.delete(key))
+            keys
+              .filter((key) => ![APP_CACHE, TILE_CACHE].includes(key))
+              .map((key) => caches.delete(key))
           )
         )
       );
@@ -1646,7 +1710,9 @@ function registerServiceWorkerInline() {
       if (req.method !== "GET") return;
 
       const url = new URL(req.url);
-      const isTile = url.hostname.includes("tile.openstreetmap.org") || url.pathname.includes("/tile/");
+      const isTile =
+        url.hostname.includes("tile.openstreetmap.org") ||
+        url.pathname.includes("/tile/");
 
       if (isTile) {
         event.respondWith(
@@ -1751,13 +1817,6 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
 
-function capitalize(value) {
-  const str = String(value || "");
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function incidentTypeLabel(type) {
-  if (type === "medical") return "🚑 Medicinsk";
-  if (type === "fire") return "🔥 Brand";
-  return "⚠️ Sikkerhed";
+function capitalizeStatus(status) {
+  return status === "optaget" ? "Optaget" : "Ledig";
 }
